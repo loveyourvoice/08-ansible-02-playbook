@@ -1,6 +1,6 @@
 ---
 - name: Install Clickhouse
-  hosts: clickhouse
+  hosts: clickhouse-1
   tags:
     - clickhouse
   handlers:
@@ -40,21 +40,137 @@
       failed_when: create_db.rc != 0 and create_db.rc != 82
       changed_when: create_db.rc == 0
 - name: Install vector
-  hosts: vector
+  hosts: vector-1
   tags:
     - vector
   tasks:
     - name: Get vector distrib
+      become: true
       ansible.builtin.get_url:
         url: "https://packages.timber.io/vector/0.30.0/vector-0.30.0-1.{{ vector_arch }}.rpm"
         dest: "./vector-0.30.0-1.{{ vector_arch }}.rpm"
         mode: "0755"
     - name: Install vector
+      become: true
       ansible.builtin.yum:
         name:
           - vector-0.30.0-1.{{ vector_arch }}.rpm
     - name: Configure vector
+      become: true
       ansible.builtin.template:
         src: "./template/vector/vector.toml.j2"
         dest: "/etc/vector/vector.toml"
         mode: "0755"
+        
+- name: Install nginx and lighthouse
+  hosts: lighthouse-1
+  handlers:
+    - name: start nginx service
+      become: true
+      ansible.builtin.systemd:
+        name: nginx
+        enabled: true
+        state: started
+    - name: restart nginx service
+      become: true
+      ansible.builtin.systemd:
+        name: nginx
+        state: restarted
+    - name: setenforce
+      become: true
+      command: setenforce 0
+
+  tasks:
+    - name: install epel-release
+      become: true
+      ansible.builtin.yum:
+        name: epel-release
+        state: present
+      tags:
+        - lighthouse
+
+    - name: install nginx
+      become: true
+      ansible.builtin.yum:
+        name: nginx
+        state: present
+      notify: start nginx service
+      tags:
+        - lighthouse
+
+    - name: Disable SELinux
+      become: true
+      ansible.posix.selinux:
+        state: disabled
+      tags:
+        - lighthouse
+      notify: setenforce
+
+
+    - name: Create a directory if it does not exist
+      become: true
+      ansible.builtin.file:
+        path: "{{ lighthouse_dir }}"
+        state: directory
+        mode: '0755'
+      tags:
+        - lighthouse
+
+    - name: install git
+      become: true
+      ansible.builtin.yum:
+        name: git
+        state: present
+      tags:
+        - lighthouse
+
+    - name: copy lighthouse service from git
+      become: true
+      ansible.builtin.git:
+        repo: "{{ lighthouse_repo }}"
+        version: master
+        dest: /tmp/lighthouse
+      tags:
+        - lighthouse
+
+    - name: copy lighthouse files1 to nginx workdir
+      become: true
+      ansible.builtin.copy:
+        src: "/tmp/lighthouse/{{ item }}"
+        dest: "{{ lighthouse_dir }}"
+        mode: '0644'
+        remote_src: true
+        follow: true
+      loop:
+        - js
+        - app.js
+        - index.html
+        - jquery.js
+      notify: restart nginx service
+      tags:
+        - lighthouse
+
+    - name: copy lighthouse files2 to nginx workdir
+      become: true
+      ansible.builtin.copy:
+        src: "/tmp/lighthouse/{{ item }}"
+        dest: "{{ lighthouse_dir }}"
+        mode: '0751'
+        remote_src: true
+        follow: true
+      loop:
+        - css
+        - img
+      notify: restart nginx service
+      tags:
+        - lighthouse
+
+    - name: create lighthouse config
+      become: true
+      ansible.builtin.template:
+        src: template/lighthouse/lighthouse.conf.j2
+        dest: /etc/nginx/conf.d/lighthouse.conf
+        mode: '0644'
+      notify: restart nginx service
+      tags:
+        - lighthouse

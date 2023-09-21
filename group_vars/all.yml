@@ -1,0 +1,3 @@
+---
+access_log_dir:  /var/log/nginx/lighthouse-access.log
+error_log_dir: /var/log/nginx/lighthouse-error.log

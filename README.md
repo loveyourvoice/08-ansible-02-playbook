@@ -3,7 +3,7 @@
 ## Содержание [playbook](./site.yml)
 
 ### Plays
-Установка Clickhouse и vector
+Установка Clickhouse,vector,lighthouse
 -  Install Clickhouse
 -  Install vector
 
@@ -20,9 +20,19 @@
 - Install vector - устанавливает скаченный дистрибутив vector
 - Configure vector - конфигурирация vector, переменные конфига подставляемые в [шаблон](./template/vector/vector.toml.j2) конфигурационного файла указанны в [vector_vars.yml](./group_vars/vector/vector_vars.yml)
 
+#### Play - Install nginx and lighthouse
+- start/restart nginx service - запускает стандартный сервис nginx
+- setenforce - отключаем SELinux
+- Create a directory if it does not exist - создаем дирректорию для лайтхауса если ее нет
+- install git - устанавливаем гит
+- copy lighthouse service from git - копируем репо гита
+- copy lighthouse files1 to nginx workdir - копируем гит в рабочую дирректорию nginx-а
+- create lighthouse config - билдим конфиг для nginx с помощью шаблона
+
 ## Tags
 - `vector` по умолчанию выполняется, установлен на Play - `Install vector`
 - `clickhouse` по умолчанию выполняется, установлен на Play - `Install Clickhouse`
+- `lighthouse` по умолчанию выполняется, установлен на Play - `Install nginx and lighthouse`
 
 ## Используемые переменные
 
@@ -60,8 +70,16 @@ vector:
     clickhouse-01:
       ansible_connection: docker
 ```
-У нас две группы хостов 
+## Lighthouse
+[all.yml](./group_vars/all.yml) тут мы предоставляем доступ и указываем где логи будут
+```yml
+---
+access_log_dir:  /var/log/nginx/lighthouse-access.log
+error_log_dir: /var/log/nginx/lighthouse-error.log
+```
+У нас три группы хостов 
 - `clickhouse` на все хосты данной группы будет установлен clickhouse и его пакеты и далее запущен
 - `vector` на все хосты данной группы будет установлен vector и сконфигурирован
+- `lighthouse` - на все хосты данной группы будет установлен lighthouse и сконфигурирован под nginx
 
-Хост всего один `clickhouse-01` и он в обоих группах, ну так получилось, для теста в рамках домашней работы его хватает.
+Данный playbook работает только на centos, а точнее с пакетным менеджером yum.
